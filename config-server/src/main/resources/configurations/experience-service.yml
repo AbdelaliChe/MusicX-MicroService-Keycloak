@@ -1,0 +1,20 @@
+server:
+  port: 8090
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/experience
+    username: postgres
+    password: ${DATABASE_PASSWORD}
+  jpa:
+    hibernate:
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+      ddl-auto: update
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: true
+  cloud:
+    config:
+      allow: true
+    discovery:
+      enabled: true
