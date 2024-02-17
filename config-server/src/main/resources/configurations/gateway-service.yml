@@ -11,3 +11,7 @@ spring:
           uri: http://localhost:8090/
           predicates:
             - Path=/api/experience/**
+        - id: comment
+          uri: http://localhost:8091/
+          predicates:
+            - Path=/api/comment/**

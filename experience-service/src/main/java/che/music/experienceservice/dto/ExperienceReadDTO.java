@@ -1,8 +1,11 @@
 package che.music.experienceservice.dto;
 
 import che.music.experienceservice.enums.AboutType;
+import che.music.experienceservice.model.Comment;
 import che.music.experienceservice.model.User;
 import lombok.*;
+
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -19,4 +22,5 @@ public class ExperienceReadDTO {
 	private String spotifyLink;
 	private boolean archived;
 	private User user;
+	private List<Comment> comments;
 }

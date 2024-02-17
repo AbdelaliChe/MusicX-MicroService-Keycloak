@@ -1,9 +1,12 @@
 package che.music.experienceservice.entity;
 
 import che.music.experienceservice.enums.AboutType;
+import che.music.experienceservice.model.Comment;
 import che.music.experienceservice.model.User;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -24,9 +27,9 @@ public class Experience {
 	private String userToughts;
 	private String spotifyLink;
 	private boolean archived;
-
 	@Transient
 	private User user;
-
 	private String userId;
+	@Transient
+	private List<Comment> comments;
 }

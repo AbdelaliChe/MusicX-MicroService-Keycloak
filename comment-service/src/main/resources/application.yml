@@ -1,0 +1,16 @@
+spring:
+  application:
+    name : comment-service
+  config:
+    import: optional:configserver:http://localhost:9999
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/experience
+          jwk-set-uri: ${spring.security.oauth2.resourceserver.jwt.issuer-uri}/protocol/openid-connect/certs
+keycloak:
+  admin:
+    url: http://localhost:8080
+

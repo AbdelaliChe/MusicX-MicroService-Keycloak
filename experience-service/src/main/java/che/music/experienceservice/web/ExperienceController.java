@@ -32,8 +32,8 @@ public class ExperienceController {
 	}
 
 	@GetMapping("/mine")
-	public ResponseEntity<List<ExperienceReadDTO>> getUserExperiences(){
-		List<Experience> experiences = experienceService.getUserExperience(getCurrentUser());
+	public ResponseEntity<List<ExperienceReadDTO>> getUserExperiences(@RequestHeader("Authorization") String authorizationHeader){
+		List<Experience> experiences = experienceService.getUserExperience(getCurrentUser(),authorizationHeader);
 		List<ExperienceReadDTO> experienceReadDTOS = experiences.stream().map(experience ->
 				experienceDtoConverter.convertToReadDTO(experience))
 				.collect(Collectors.toList());

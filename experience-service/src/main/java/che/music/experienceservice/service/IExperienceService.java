@@ -13,6 +13,6 @@ public interface IExperienceService {
 	Experience getExperienceByName(String name);
 	List<Experience> getExperienceByUserId(String userId);
 	List<Experience> getAllExperiences(String Jwt);
-	List<Experience> getUserExperience(Map<String,Object> user);
+	List<Experience> getUserExperience(Map<String,Object> user, String authorizationHeader);
 }
 

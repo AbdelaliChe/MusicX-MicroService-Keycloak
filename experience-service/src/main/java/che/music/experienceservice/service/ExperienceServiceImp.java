@@ -1,7 +1,9 @@
 package che.music.experienceservice.service;
 
 import che.music.experienceservice.entity.Experience;
+import che.music.experienceservice.feign.CommentClient;
 import che.music.experienceservice.feign.KeycloakAdminClient;
+import che.music.experienceservice.model.Comment;
 import che.music.experienceservice.model.User;
 import che.music.experienceservice.repository.IExperienceDao;
 import che.music.experienceservice.exception.NotFoundException;
@@ -10,6 +12,7 @@ import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -21,6 +24,7 @@ public class ExperienceServiceImp implements IExperienceService{
 
 	private IExperienceDao experienceDao;
 	private KeycloakAdminClient keycloakAdminClient;
+	private CommentClient commentClient;
 
 	@Override
 	public Experience createExperience(Experience experience, String userId) {
@@ -85,21 +89,28 @@ public class ExperienceServiceImp implements IExperienceService{
 		}
 	}
 
+	private Experience setupExperience(String jwt, Experience experience) {
+		Map<String, Object> response =
+				keycloakAdminClient.getUserById(experience.getUserId(),jwt).getBody();
+		User user = User.builder()
+				.id(experience.getUserId())
+				.firstName((String) response.get("firstName"))
+				.lastName((String) response.get("lastName"))
+				.email((String) response.get("email"))
+				.build();
+
+		List<Comment> comments = commentClient.getAllCommentsOfExperience(experience.getId(),jwt).getBody();
+		experience.setComments(comments);
+		experience.setUser(user);
+		return experience;
+	}
+
 	@Override
 	public Experience getExperienceById(Long id, String jwt) {
 		//this jwt is with Bearer
 		Experience experience = getExperienceById(id);
 		if(experience != null){
-			Map<String, Object> response =
-					keycloakAdminClient.getUserById(experience.getUserId(),jwt).getBody();
-			User user = User.builder()
-					.id(experience.getUserId())
-					.firstName((String) response.get("firstName"))
-					.lastName((String) response.get("lastName"))
-					.email((String) response.get("email"))
-					.build();
-			experience.setUser(user);
-			return experience;
+			return setupExperience(jwt, experience);
 		}else{
 			throw new NotFoundException("Experience not found with id: " + id);
 		}
@@ -119,22 +130,13 @@ public class ExperienceServiceImp implements IExperienceService{
 	public List<Experience> getAllExperiences(String jwt) {
 		List<Experience> experiences = experienceDao.findAll();
 		List<Experience> allExperienceWithUsers = experiences.stream().map(experience -> {
-			Map<String, Object> response =
-					keycloakAdminClient.getUserById(experience.getUserId(),jwt).getBody();
-			User user = User.builder()
-					.id(experience.getUserId())
-					.firstName((String) response.get("firstName"))
-					.lastName((String) response.get("lastName"))
-					.email((String) response.get("email"))
-					.build();
-			experience.setUser(user);
-			return experience;
+			return setupExperience(jwt, experience);
 		}).collect(Collectors.toList());
 		return allExperienceWithUsers;
 	}
 
 	@Override
-	public List<Experience> getUserExperience(Map<String,Object> userMap) {
+	public List<Experience> getUserExperience(Map<String,Object> userMap, String jwt) {
 		List<Experience> experiences = experienceDao.findByUserId((String) userMap.get("sub"));
 		List<Experience> allExperienceForUser = experiences.stream().map(experience -> {
 			User user = User.builder()
@@ -144,6 +146,8 @@ public class ExperienceServiceImp implements IExperienceService{
 					.email((String) userMap.get("email"))
 					.build();
 			experience.setUser(user);
+			List<Comment> comments = commentClient.getAllCommentsOfExperience(experience.getId(), jwt).getBody();
+			experience.setComments(comments);
 			return experience;
 		}).collect(Collectors.toList());
 		return allExperienceForUser;
