@@ -1,10 +1,12 @@
 package che.music.experienceservice.dto;
 
-import che.music.experienceservice.enums.AboutType;
-import che.music.experienceservice.model.Comment;
-import che.music.experienceservice.model.User;
+import che.music.experienceservice.enums.ItemType;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -14,13 +16,19 @@ import java.util.List;
 @Builder
 public class ExperienceReadDTO {
 	private Long id;
-	private String name;
-	private String imagePath;
-	private AboutType about;
+	private String spotifyItemId;
+	private String userId;
+	private ItemType itemType;
+
+	private String title;
 	private String description;
-	private String userToughts;
-	private String spotifyLink;
+	private String content;
+
 	private boolean archived;
+	private int views;
+	private int likes;
+	private LocalDateTime createdAt;
+	private LocalDateTime updatedAt;
+
 	private User user;
-	private List<Comment> comments;
 }

@@ -7,11 +7,17 @@ spring:
         locator:
           enabled: true
       routes:
-        - id: experience
+        - id: experiences
           uri: http://localhost:8090/
           predicates:
-            - Path=/api/experience/**
-        - id: comment
+            - Path=/api/experiences/**
+        - id: comments
           uri: http://localhost:8091/
           predicates:
-            - Path=/api/comment/**
+            - Path=/api/comments/**
+okta:
+  oauth2:
+    issuer: https://dev-kat1rgca2l8mbhi3.us.auth0.com/
+    clientId: ${AUTH0_CLIENT_ID}
+    clientSecret: ${AUTH0_CLIENT_SECRET}
+    audience: https://dev-kat1rgca2l8mbhi3.us.auth0.com/api/v2/

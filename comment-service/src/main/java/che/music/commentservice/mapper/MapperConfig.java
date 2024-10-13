@@ -1,4 +1,4 @@
-package che.music.experienceservice.dto;
+package che.music.commentservice.mapper;
 
 import org.modelmapper.ModelMapper;
 import org.springframework.context.annotation.Bean;

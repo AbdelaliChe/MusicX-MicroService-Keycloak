@@ -3,9 +3,9 @@ server:
 spring:
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/experience
-    username: postgres
-    password: ${DATABASE_PASSWORD}
+    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+    username: ${POSTGRES_USERNAME}
+    password: ${POSTGRES_PASSWORD}
   jpa:
     hibernate:
       dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -18,3 +18,9 @@ spring:
       allow: true
     discovery:
       enabled: true
+okta:
+  oauth2:
+    issuer: https://dev-kat1rgca2l8mbhi3.us.auth0.com/
+    clientId: ${AUTH0_CLIENT_ID}
+    clientSecret: ${AUTH0_CLIENT_SECRET}
+    audience: https://dev-kat1rgca2l8mbhi3.us.auth0.com/api/v2/

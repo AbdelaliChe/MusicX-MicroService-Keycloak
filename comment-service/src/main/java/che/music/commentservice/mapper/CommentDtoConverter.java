@@ -1,5 +1,8 @@
-package che.music.commentservice.dto;
+package che.music.commentservice.mapper;
 
+import che.music.commentservice.dto.CommentCreateDTO;
+import che.music.commentservice.dto.CommentReadDTO;
+import che.music.commentservice.dto.CommentUpdateDTO;
 import che.music.commentservice.entity.Comment;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +18,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class CommentDtoConverter {
 
-	private ModelMapper modelMapper;
+	private final ModelMapper modelMapper;
 
 	public CommentReadDTO convertToReadDTO(Comment comment) {
 		return modelMapper.map(comment, CommentReadDTO.class);

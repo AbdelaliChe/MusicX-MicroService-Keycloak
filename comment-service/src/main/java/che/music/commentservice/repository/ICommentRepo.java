@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface ICommentDao extends JpaRepository<Comment,Long> {
+public interface ICommentRepo extends JpaRepository<Comment,Long> {
 	List<Comment> findByUserId(String userId);
 	List<Comment> findCommentsByExperienceId(Long ExperienceId);
 }

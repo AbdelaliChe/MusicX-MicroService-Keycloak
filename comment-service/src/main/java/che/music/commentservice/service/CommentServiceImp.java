@@ -1,140 +1,145 @@
 package che.music.commentservice.service;
 
+import che.music.commentservice.dto.*;
 import che.music.commentservice.entity.Comment;
 import che.music.commentservice.exception.NotFoundException;
 import che.music.commentservice.exception.NotYoursException;
-import che.music.commentservice.feign.KeycloakAdminClient;
-import che.music.commentservice.model.User;
-import che.music.commentservice.repository.ICommentDao;
+import che.music.commentservice.feign.Auth0Client;
+import che.music.commentservice.feign.ExperienceClient;
+import che.music.commentservice.mapper.CommentDtoConverter;
+import che.music.commentservice.repository.ICommentRepo;
 import jakarta.transaction.Transactional;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
-
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@Transactional
+@Slf4j
+@RequiredArgsConstructor
 @Service
-@AllArgsConstructor
 public class CommentServiceImp implements ICommentService {
 
-	private ICommentDao commentDao;
-	private KeycloakAdminClient keycloakAdminClient;
+	private final ICommentRepo commentRepo;
+	private final Auth0Client auth0Client;
+	private final CommentDtoConverter commentDtoConverter;
+	private final ExperienceClient experienceClient;
 
+	private final OAuth2AuthorizedClientService authorizedClientService;
+	private final ClientRegistrationRepository clientRegistrationRepository;
+
+	@Value("${okta.oauth2.clientId}")
+	private String clientId;
+
+	@Value("${okta.oauth2.clientSecret}")
+	private String clientSecret;
+
+	@Value("${okta.oauth2.audience}")
+	private String audience;
+
+	@Transactional
 	@Override
-	public Comment createComment(Comment comment, String userId, Long experienceId) {
+	public CommentReadDTO createComment(CommentCreateDTO commentCreateDTO) {
+		// TODO : check for experience existence!
+		/*if(!isExperienceExist(commentCreateDTO.getExperienceId()))
+			throw new NotFoundException("Experience with Id : "+ commentCreateDTO.getExperienceId() + "does not exist!");
+		*/
+		Comment comment = commentDtoConverter.convertToEntity(commentCreateDTO);
+		String userId = (String) getCurrentUser().get("sub");
 		comment.setUserId(userId);
-		comment.setExperienceId(experienceId);
-		return commentDao.save(comment);
+		CommentReadDTO experienceReadDTO = commentDtoConverter.convertToReadDTO(
+				commentRepo.save(comment));
+
+		return experienceReadDTO;
 	}
 
+	@Transactional
 	@Override
-	public boolean updateComment(Comment comment, String userId) {
-		Comment commentToEdit = getCommentById(comment.getId());
-		if (commentToEdit!=null) {
-			if (!commentToEdit.getUserId().equals(userId)) {
-				throw new NotFoundException("you can't update a comment that you don't own");
-			}
-			commentToEdit.setText(comment.getText());
-			commentDao.save(commentToEdit);
+	public CommentReadDTO updateComment(Long id, CommentUpdateDTO commentUpdateDTO) {
+		Comment commentToEdit = getCommentById(id);
+		String userId = (String) getCurrentUser().get("sub");
+		if (!commentToEdit.getUserId().equals(userId)) {
+			throw new NotFoundException("You can't update comment with id: " + id + " because you don't own it.");
+		}
+		commentToEdit.setContent(commentUpdateDTO.getContent());
+		commentToEdit.setUpdatedAt( LocalDateTime.now());
+		return commentDtoConverter.convertToReadDTO(commentRepo.save(commentToEdit));
+	}
+
+	@Transactional
+	@Override
+	public boolean deleteComment(Long id) {
+		Comment comment = getCommentById(id);
+		String userId = (String) getCurrentUser().get("sub");
+		if(comment.getUserId().equals(userId)){
+			commentRepo.delete(comment);
 			return true;
-		} else {
-			throw new NotFoundException("Comment not found with id: " + comment.getId());
-		}
-	}
-
-	@Override
-	public boolean deleteComment(Long id, String userId) {
-		Comment comment = getCommentById(id);
-		if(comment != null){
-			if(comment.getUserId().equals(userId)){
-				commentDao.delete(comment);
-				return true;
-			}else{
-				throw new NotYoursException("you can't delete a comment that you don't own");
-			}
 		}else{
-			throw new NotFoundException("Comment not found with id: " + id);
+			throw new NotYoursException("You can't delete comment with id: " + id + " because you don't own it.");
 		}
 	}
 
 	@Override
-	public Comment getCommentById(Long id, String jwt) {
-		Comment comment = getCommentById(id);
-		if(comment != null){
-			Map<String, Object> response =
-					keycloakAdminClient.getUserById(comment.getUserId(),jwt).getBody();
-			User user = User.builder()
-					.id(comment.getUserId())
-					.firstName((String) response.get("firstName"))
-					.lastName((String) response.get("lastName"))
-					.email((String) response.get("email"))
-					.build();
-			comment.setUser(user);
-			return comment;
-		}else{
-			throw new NotFoundException("Comment not found with id: " + id);
-		}
-	}
-
-	@Override
-	public List<Comment> getCommentByUserId(String userId) {
-		return commentDao.findByUserId(userId);
-	}
-
-	@Override
-	public List<Comment> getAllComments(String jwt) {
-		List<Comment> comments = commentDao.findAll();
-		List<Comment> allCommentWithUsers = comments.stream().map(comment -> {
-			Map<String, Object> response =
-					keycloakAdminClient.getUserById(comment.getUserId(),jwt).getBody();
-			User user = User.builder()
-					.id(comment.getUserId())
-					.firstName((String) response.get("firstName"))
-					.lastName((String) response.get("lastName"))
-					.email((String) response.get("email"))
-					.build();
-			comment.setUser(user);
-			return comment;
+	public List<CommentReadDTO> getCommentsByExperienceId(Long experienceId) {
+		List<Comment> comments = commentRepo.findCommentsByExperienceId(experienceId);
+		return comments.stream().map(comment -> {
+			CommentReadDTO commentReadDTO = commentDtoConverter.convertToReadDTO(comment);
+			commentReadDTO.setUser(this.buildUser(comment.getUserId()));
+			return commentReadDTO;
 		}).collect(Collectors.toList());
-		return allCommentWithUsers;
 	}
 
-	@Override
-	public List<Comment> getAllCommentsOfExperience(Long experienceId, String jwt) {
-		List<Comment> comments = commentDao.findCommentsByExperienceId(experienceId);
-		List<Comment> allCommentWithUsers = comments.stream().map(comment -> {
-			Map<String, Object> response =
-					keycloakAdminClient.getUserById(comment.getUserId(),jwt).getBody();
-			User user = User.builder()
-					.id(comment.getUserId())
-					.firstName((String) response.get("firstName"))
-					.lastName((String) response.get("lastName"))
-					.email((String) response.get("email"))
-					.build();
-			comment.setUser(user);
-			return comment;
-		}).collect(Collectors.toList());
-		return allCommentWithUsers;
+	private User buildUser(String userId) {
+		String token = this.getToken();
+		String authorizationHeader = "Bearer " + token;
+		ResponseEntity<User> response = auth0Client.getUserById(userId, authorizationHeader);
+		if(response.getStatusCode().equals(HttpStatus.OK)) return response.getBody();
+		throw new NotFoundException("User with id : "+ userId + "doesn't exit!");
 	}
 
-	@Override
-	public List<Comment> getUserComment(Map<String, Object> userMap) {
-		List<Comment> comments = commentDao.findByUserId((String) userMap.get("sub"));
-		List<Comment> allCommentForUser = comments.stream().map(comment -> {
-			User user = User.builder()
-					.id(comment.getUserId())
-					.firstName((String) userMap.get("given_name"))
-					.lastName((String) userMap.get("family_name"))
-					.email((String) userMap.get("email"))
-					.build();
-			comment.setUser(user);
-			return comment;
-		}).collect(Collectors.toList());
-		return allCommentForUser;
+	private Comment getCommentById(Long id) {
+		return commentRepo.findById(id).orElseThrow(() ->
+				new NotFoundException("Comment not found with id: " + id));
 	}
-	public Comment getCommentById(Long id) {
-		return commentDao.findById(id).orElse(null);
+
+	private String getToken(){
+		TokenRequest tokenRequest = TokenRequest.builder()
+				.grant_type("client_credentials")
+				.client_id(clientId)
+				.client_secret(clientSecret)
+				.audience(audience)
+				.build();
+		return auth0Client.getAccessToken(tokenRequest).getAccess_token();
+	}
+
+	private Map<String, Object> getCurrentUser(){
+		OAuth2User oAuth2User = (OAuth2User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+		return oAuth2User.getAttributes();
+	}
+
+	private boolean isExperienceExist(Long experienceId) {
+		String authorizationHeader = "Bearer " + this.getCurrentAccessToken();
+		log.info("token : {}",authorizationHeader);
+
+		ResponseEntity<?> response = experienceClient
+				.getExperienceById(experienceId, authorizationHeader);
+		return response.getStatusCode().equals(HttpStatus.OK);
+	}
+
+	private String getCurrentAccessToken() {
+		//
+		return null;
 	}
 }

@@ -1,5 +1,8 @@
-package che.music.experienceservice.dto;
+package che.music.experienceservice.mapper;
 
+import che.music.experienceservice.dto.ExperienceCreateDTO;
+import che.music.experienceservice.dto.ExperienceReadDTO;
+import che.music.experienceservice.dto.ExperienceUpdateDTO;
 import che.music.experienceservice.entity.Experience;
 import lombok.*;
 import org.modelmapper.ModelMapper;
@@ -12,7 +15,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExperienceDtoConverter {
 
-	private ModelMapper modelMapper;
+	private final ModelMapper modelMapper;
 
 	public ExperienceReadDTO convertToReadDTO(Experience experience) {
 		return modelMapper.map(experience, ExperienceReadDTO.class);
@@ -27,6 +30,11 @@ public class ExperienceDtoConverter {
 	}
 
 	public Experience convertToEntity(Object dto) {
+		modelMapper.typeMap(dto.getClass(), Experience.class)
+				.addMappings(mapper -> {
+					mapper.skip(Experience::setId);
+				});
+
 		return modelMapper.map(dto, Experience.class);
 	}
 }

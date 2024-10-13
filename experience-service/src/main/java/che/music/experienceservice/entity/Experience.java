@@ -1,12 +1,9 @@
 package che.music.experienceservice.entity;
 
-import che.music.experienceservice.enums.AboutType;
-import che.music.experienceservice.model.Comment;
-import che.music.experienceservice.model.User;
+import che.music.experienceservice.enums.ItemType;
 import jakarta.persistence.*;
 import lombok.*;
-
-import java.util.List;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -19,17 +16,30 @@ public class Experience {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
-	private String name;
-	private String imagePath;
-	@Enumerated(EnumType.STRING)
-	private AboutType about; // - about (song-album-artist)
-	private String description;
-	private String userToughts;
-	private String spotifyLink;
-	private boolean archived;
-	@Transient
-	private User user;
+	private String spotifyItemId;
 	private String userId;
-	@Transient
-	private List<Comment> comments;
+
+	@Enumerated(EnumType.STRING)
+	private ItemType itemType; // type of item (song-album-artist)
+
+	private String title;
+	private String description;
+	private String content;
+
+	private boolean archived = false;
+	private int views = 0;
+	private int likes = 0;
+	@Column(updatable = false)
+	private LocalDateTime createdAt;
+	private LocalDateTime updatedAt;
+
+	@PrePersist
+	protected void onCreate() {
+		createdAt = LocalDateTime.now();
+	}
+
+	@PreUpdate
+	protected void onUpdate() {
+		updatedAt = LocalDateTime.now();
+	}
 }

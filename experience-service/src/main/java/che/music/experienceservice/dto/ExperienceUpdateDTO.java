@@ -1,6 +1,6 @@
 package che.music.experienceservice.dto;
 
-import che.music.experienceservice.enums.AboutType;
+import che.music.experienceservice.enums.ItemType;
 import lombok.*;
 
 @Data
@@ -9,12 +9,7 @@ import lombok.*;
 @ToString
 @Builder
 public class ExperienceUpdateDTO{
-	private Long id;
-	private String name;
-	private String imagePath;
-	private AboutType about;
+	private String title;
 	private String description;
-	private String userToughts;
-	private String spotifyLink;
-	private boolean archived;
+	private String content;
 }

@@ -1,8 +1,12 @@
 package che.music.experienceservice.dto;
 
-import che.music.experienceservice.enums.AboutType;
-import che.music.experienceservice.model.User;
+import che.music.experienceservice.enums.ItemType;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -10,10 +14,11 @@ import lombok.*;
 @ToString
 @Builder
 public class ExperienceCreateDTO {
-	private String name;
-	private String imagePath;
-	private AboutType about;
+
+	private String spotifyItemId;
+	private ItemType itemType;
+
+	private String title;
 	private String description;
-	private String userToughts;
-	private String spotifyLink;
+	private String content;
 }

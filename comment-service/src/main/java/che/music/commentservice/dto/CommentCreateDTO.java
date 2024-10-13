@@ -8,5 +8,6 @@ import lombok.*;
 @ToString
 @Builder
 public class CommentCreateDTO {
-	private String text;
+	private Long experienceId;
+	private String content;
 }

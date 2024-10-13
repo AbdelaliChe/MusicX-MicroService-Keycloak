@@ -1,155 +1,201 @@
 package che.music.experienceservice.service;
 
+import che.music.experienceservice.dto.*;
 import che.music.experienceservice.entity.Experience;
-import che.music.experienceservice.feign.CommentClient;
-import che.music.experienceservice.feign.KeycloakAdminClient;
-import che.music.experienceservice.model.Comment;
-import che.music.experienceservice.model.User;
-import che.music.experienceservice.repository.IExperienceDao;
+import che.music.experienceservice.feign.Auth0Client;
+import che.music.experienceservice.mapper.ExperienceDtoConverter;
+import che.music.experienceservice.repository.IExperienceRepo;
 import che.music.experienceservice.exception.NotFoundException;
 import che.music.experienceservice.exception.NotYoursException;
 import jakarta.transaction.Transactional;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
-
-import java.util.Arrays;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@Transactional
+@Slf4j
+@RequiredArgsConstructor
 @Service
-@AllArgsConstructor
 public class ExperienceServiceImp implements IExperienceService{
 
-	private IExperienceDao experienceDao;
-	private KeycloakAdminClient keycloakAdminClient;
-	private CommentClient commentClient;
+	private final IExperienceRepo experienceRepo;
+	private final Auth0Client auth0Client;
+	private final ExperienceDtoConverter experienceDtoConverter;
 
+	@Value("${okta.oauth2.clientId}")
+	private String clientId;
+
+	@Value("${okta.oauth2.clientSecret}")
+	private String clientSecret;
+
+	@Value("${okta.oauth2.audience}")
+	private String audience;
+
+	@Transactional
 	@Override
-	public Experience createExperience(Experience experience, String userId) {
+	public ExperienceReadDTO createExperience(ExperienceCreateDTO experienceDto) {
+		Experience experience = experienceDtoConverter.convertToEntity(experienceDto);
+		String userId = (String) this.getCurrentUser().get("sub");
 		experience.setUserId(userId);
-		return experienceDao.save(experience);
+		ExperienceReadDTO experienceReadDTO = experienceDtoConverter.convertToReadDTO(
+						experienceRepo.save(experience));
+		return experienceReadDTO;
 	}
 
 	@Override
-	public boolean updateExperience(Experience experience, String userId) {
-		Experience experienceToEdit = getExperienceById(experience.getId());
-		if (experienceToEdit!=null) {
+	public ExperienceReadDTO getExperienceById(Long id, boolean fetchUser) {
+		Experience experience = experienceRepo.findById(id)
+				.orElseThrow(() -> new NotFoundException("Experience not found with id: " + id));
+		return this.getExperienceReadDTO(fetchUser, experience);
+	}
 
-			if (!experienceToEdit.getUserId().equals(userId)) {
-				throw new NotYoursException("you can't update an experience that you don't own");
-			}
+	@Override
+	public List<ExperienceReadDTO> getExperienceByItemId(String id, boolean fetchUser) {
+		List<Experience> experiences = experienceRepo.findExperienceBySpotifyItemId(id);
+		return experiences.stream().map(experience ->
+				this.getExperienceReadDTO(fetchUser, experience))
+				.collect(Collectors.toList());
+	}
 
-			if (experience.getUserToughts() != null && !experience.getUserToughts().isEmpty()) {
-				experienceToEdit.setUserToughts(experience.getUserToughts());
+	@Override
+	public PaginatedResponse<ExperienceReadDTO> getAllExperiences(Integer size, Integer page, boolean fetchUser) {
+		Pageable pageable = PageRequest.of(page, size);
+		Page<Experience> experiences = experienceRepo.findAllNonArchived(pageable);
+
+		List<ExperienceReadDTO> experienceReadDTOList = experiences.stream().map(experience ->
+						this.getExperienceReadDTO(fetchUser, experience))
+				.collect(Collectors.toList());
+
+		return PaginatedResponse.<ExperienceReadDTO>builder()
+				.content(experienceReadDTOList)
+				.pageNumber(experiences.getNumber())
+				.pageSize(experiences.getSize())
+				.totalElements(experiences.getTotalElements())
+				.totalPages(experiences.getTotalPages())
+				.build();
+	}
+
+	@Override
+	public List<ExperienceReadDTO> getExperienceByUserId(String userId, boolean fetchUser) {
+		List<Experience> experiences = experienceRepo.findByUserId(userId);
+		return experiences.stream().map(experience ->
+						this.getExperienceReadDTO(fetchUser, experience))
+				.collect(Collectors.toList());
+	}
+
+	@Transactional
+	@Override
+	public ExperienceReadDTO updateExperience(Long id, ExperienceUpdateDTO experienceUpdateDTO) {
+		// get xp to edit
+		Experience experienceToEdit = experienceRepo.findById(id)
+				.orElseThrow(() -> new NotFoundException("Experience not found with id: " + id));
+		// sent experience
+		Experience experience = experienceDtoConverter.convertToEntity(experienceUpdateDTO);
+
+		String userId = (String) getCurrentUser().get("sub");
+		// check for owner
+		if(experienceToEdit.getUserId().equals(userId)){
+			if (experience.getContent() != null && !experience.getContent().isEmpty()) {
+				experienceToEdit.setContent(experience.getContent());
 			}
-			if (experience.getUserId() != null && !experience.getUserId().isEmpty()) {
-				experienceToEdit.setUserId(experience.getUserId());
-			}
-			if (experience.getAbout() != null) {
-				experienceToEdit.setAbout(experience.getAbout());
-			}
-			if (experience.getName() != null && !experience.getName().isEmpty()) {
-				experienceToEdit.setName(experience.getName());
+			if (experience.getTitle() != null && !experience.getTitle().isEmpty()) {
+				experienceToEdit.setTitle(experience.getTitle());
 			}
 			if (experience.getDescription() != null && !experience.getDescription().isEmpty()) {
 				experienceToEdit.setDescription(experience.getDescription());
 			}
-			if (experience.getImagePath() != null && !experience.getImagePath().isEmpty()) {
-				experienceToEdit.setImagePath(experience.getImagePath());
-			}
-			if (experience.getSpotifyLink() != null && !experience.getSpotifyLink().isEmpty()) {
-				experienceToEdit.setSpotifyLink(experience.getSpotifyLink());
-			}
+			experienceToEdit.setUpdatedAt( LocalDateTime.now());
+			return experienceDtoConverter.convertToReadDTO(experienceRepo.save(experienceToEdit));
+		}else{
+			throw new NotYoursException("You can't update experience with id: " + id + " because you don't own it.");
+		}
+	}
 
-			experienceDao.save(experienceToEdit);
+	@Transactional
+	@Override
+	public boolean deleteExperience(Long id) {
+		// get xp to delete
+		Experience experience = experienceRepo.findById(id)
+				.orElseThrow(() -> new NotFoundException("Experience not found with id: " + id));
+		// maybe just archive it ?
+		String userId = (String) getCurrentUser().get("sub");
+		// check for ownership
+		if(experience.getUserId().equals(userId)){
+			experienceRepo.delete(experience);
 			return true;
+		}else{
+			throw new NotYoursException("You can't delete experience with id: " + id + " because you don't own it.");
+		}
+	}
+
+	@Override
+	public void incrementViews(Long id) {
+		Experience experience = experienceRepo.findById(id)
+				.orElseThrow(() -> new NotFoundException("Experience not found with id: " + id));
+		experience.setViews(experience.getViews()+1);
+		experienceRepo.save(experience);
+	}
+
+	@Override
+	public void likeAction(Long id, boolean like) {
+		Experience experience = experienceRepo.findById(id)
+				.orElseThrow(() -> new NotFoundException("Experience not found with id: " + id));
+		if (like) {
+			experience.setLikes(experience.getLikes() + 1);
 		} else {
-			throw new NotFoundException("Experience not found with id: " + experience.getId());
+			experience.setLikes(experience.getLikes() - 1);
 		}
+		experienceRepo.save(experience);
 	}
 
-
-	private Experience getExperienceById(Long id) {
-		return experienceDao.findById(id).orElse(null);
-	}
 	@Override
-	public boolean deleteExperience(Long id, String userId) {
-		Experience experience = getExperienceById(id);
-		if(experience != null){
-			if(experience.getUserId().equals(userId)){
-				experienceDao.delete(experience);
-				return true;
-			}else{
-				throw new NotYoursException("you can't delete an experience that you don't own");
-			}
-		}else{
-			throw new NotFoundException("Experience not found with id: " + id);
-		}
+	public void archiveExperienceAction(Long id, boolean archive) {
+		Experience experience = experienceRepo.findById(id)
+				.orElseThrow(() -> new NotFoundException("Experience not found with id: " + id));
+		experience.setArchived(archive);
+		experience.setUpdatedAt( LocalDateTime.now());
+		experienceRepo.save(experience);
 	}
 
-	private Experience setupExperience(String jwt, Experience experience) {
-		Map<String, Object> response =
-				keycloakAdminClient.getUserById(experience.getUserId(),jwt).getBody();
-		User user = User.builder()
-				.id(experience.getUserId())
-				.firstName((String) response.get("firstName"))
-				.lastName((String) response.get("lastName"))
-				.email((String) response.get("email"))
+	//commons
+	private ExperienceReadDTO getExperienceReadDTO(boolean fetchUser, Experience experience) {
+		ExperienceReadDTO experienceReadDTO = experienceDtoConverter.convertToReadDTO(experience);
+		if(fetchUser) experienceReadDTO.setUser(this.buildUser(experience.getUserId()));
+		return experienceReadDTO;
+	}
+
+	private User buildUser(String userId) {
+		String token = this.getToken();
+		String authorizationHeader = "Bearer " + token;
+		ResponseEntity<User> response = auth0Client.getUserById(userId, authorizationHeader);
+		log.info("auth0 response {}", response);
+		if(response.getStatusCode().equals(HttpStatus.OK)) return response.getBody();
+		throw new NotFoundException("User with id : "+ userId +" doesn't exit!");
+	}
+
+	private String getToken(){
+		TokenRequest tokenRequest = TokenRequest.builder()
+				.grant_type("client_credentials")
+				.client_id(clientId)
+				.client_secret(clientSecret)
+				.audience(audience)
 				.build();
-
-		List<Comment> comments = commentClient.getAllCommentsOfExperience(experience.getId(),jwt).getBody();
-		experience.setComments(comments);
-		experience.setUser(user);
-		return experience;
+		return auth0Client.getAccessToken(tokenRequest).getAccess_token();
 	}
 
-	@Override
-	public Experience getExperienceById(Long id, String jwt) {
-		//this jwt is with Bearer
-		Experience experience = getExperienceById(id);
-		if(experience != null){
-			return setupExperience(jwt, experience);
-		}else{
-			throw new NotFoundException("Experience not found with id: " + id);
-		}
-	}
-
-	@Override
-	public Experience getExperienceByName(String name) {
-		return experienceDao.findByName(name);
-	}
-
-	@Override
-	public List<Experience> getExperienceByUserId(String userId) {
-		return experienceDao.findByUserId(userId);
-	}
-
-	@Override
-	public List<Experience> getAllExperiences(String jwt) {
-		List<Experience> experiences = experienceDao.findAll();
-		List<Experience> allExperienceWithUsers = experiences.stream().map(experience -> {
-			return setupExperience(jwt, experience);
-		}).collect(Collectors.toList());
-		return allExperienceWithUsers;
-	}
-
-	@Override
-	public List<Experience> getUserExperience(Map<String,Object> userMap, String jwt) {
-		List<Experience> experiences = experienceDao.findByUserId((String) userMap.get("sub"));
-		List<Experience> allExperienceForUser = experiences.stream().map(experience -> {
-			User user = User.builder()
-					.id(experience.getUserId())
-					.firstName((String) userMap.get("given_name"))
-					.lastName((String) userMap.get("family_name"))
-					.email((String) userMap.get("email"))
-					.build();
-			experience.setUser(user);
-			List<Comment> comments = commentClient.getAllCommentsOfExperience(experience.getId(), jwt).getBody();
-			experience.setComments(comments);
-			return experience;
-		}).collect(Collectors.toList());
-		return allExperienceForUser;
+	private Map<String, Object> getCurrentUser(){
+		OAuth2User oAuth2User = (OAuth2User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+		return oAuth2User.getAttributes();
 	}
 }

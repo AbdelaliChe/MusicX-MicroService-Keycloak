@@ -1,8 +1,9 @@
 package che.music.commentservice.entity;
 
-import che.music.commentservice.model.User;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -15,9 +16,22 @@ public class Comment {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
-	private String text;
 	private Long experienceId;
-	@Transient
-	private User user;
 	private String userId;
+
+	private String content;
+
+	@Column(updatable = false)
+	private LocalDateTime createdAt;
+	private LocalDateTime updatedAt;
+
+	@PrePersist
+	protected void onCreate() {
+		createdAt = LocalDateTime.now();
+	}
+
+	@PreUpdate
+	protected void onUpdate() {
+		updatedAt = LocalDateTime.now();
+	}
 }
